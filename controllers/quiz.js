@@ -58,6 +58,8 @@ exports.create = (req, res, next) => {
         answer
     });
 
+    req.session.toBeResolved = "";
+
     // Saves only the fields question and answer into the DDBB
     quiz.save({fields: ["question", "answer"]})
     .then(quiz => {
@@ -155,69 +157,76 @@ exports.check = (req, res, next) => {
 };
 
 // GET /quizzes/randomplay
-exports.randomPlay = (req, res, next) => {
-
-
-    if(req.session.resolved === undefined) {
-        req.session.resolved = [];
+exports.randomplay = (req, res, next) => {
+    if(req.session.toBeResolved){
+        renderQuiz(req, res, next);
+    } else {
+        req.session.toBeResolved = [];
+        req.session.score = 0;
+        let i = 0;
+        models.quiz.findAll()
+            .each(quiz => {
+                req.session.toBeResolved[i] = quiz.id;
+                i++;
+            })
+            .then(() => {
+                renderQuiz(req, res, next);
+            })
     }
 
-    Sequelize.Promise.resolve().then(() => {
+}
 
-        const whereOpt = {"id": {[Sequelize.Op.notIn]:req.session.resolved}};
+// GET /quizzes/randomcheck/:quizId?answer=respuesta
+exports.randomcheck = (req, res, next) => {
+    const {quiz, query} = req;
 
-        return models.quiz.count({where: whereOpt})
-            .then(count => {
-                let score = req.session.resolved.length;
-                if (count === 0){
-                    delete req.session.resolved;
-                    res.render('quizzes/random_nomore', {score});
-                }
-                let ran = Math.floor(Math.random()*count);
-                return models.quiz.findAll({
-                    where: whereOpt,
-                    offset: ran,
-                    limit: 1
-                }).then(quizzes => {
-                    return quizzes[0];
-                });
-            }).catch(error => {
-                req.flash('error', 'Error deleting the Quiz: ' + error.message);
-                next(error);
-            });
-    }).then(quiz => {
-        console.log("QUIZ" + quiz);
-        let score = req.session.resolved.length;
-        res.render('quizzes/random_play', {
-            quiz,
+    const answer = query.answer || "";
+    const result = answer.toLowerCase().trim() === quiz.answer.toLowerCase().trim();
+
+    if(result){
+        req.session.toBeResolved.splice(req.session.num,1);
+        req.session.score ++;
+    }
+    const score = req.session.score;
+
+    if(req.session.toBeResolved.length === 0){
+        req.session.score = 0;
+        req.session.toBeResolved = "";
+        res.render('quizzes/random_nomore', {
             score
         });
-    });
-};
-
-
-exports.randomCheck = (req, res, next) => {
-
-    const answer = req.query.answer || '';
-    const result = answer.toLowerCase().trim() === req.quiz.answer.toLowerCase().trim();
-    if (result) {
-        if (req.session.resolved.indexOf(req.quiz.id) === -1){
-            req.session.resolved.push(req.quiz.id);
-        }
-        const score = req.session.resolved.length;
-        models.quiz.count()
-            .then( count => {
-                if (score > count){
-                    delete req.session.resolved;
-                    res.render('quizzes/random_result', {result, score, answer});
-                } else {
-                    res.render('quizzes/random_result', {result, score, answer});
-                }
-            });
-    } else {
-        const score = req.session.resolved.length;
-        delete req.session.resolved;
-        res.render('quizzes/random_result', {result, score, answer});
+    }else{
+        res.render('quizzes/random_result', {
+            quiz,
+            result,
+            answer,
+            score
+        });
     }
 
-};
+
+
+
+}
+
+renderQuiz = (req, res, next) => {
+    req.session.num = Math.floor((Math.random() * req.session.toBeResolved.length));
+    let id = req.session.toBeResolved[req.session.num];
+    const query = req;
+    const score = req.session.score;
+    const answer = query.answer || '';
+    models.quiz.findById(id)
+        .then(quiz => {
+            if (quiz) {
+                res.render('quizzes/random_play',{
+                    quiz,
+                    answer,
+                    score,
+                });
+            } else {
+                res.render('quizzes/random_noquiz',{score:0})
+                //throw new Error('There is no quizzes');
+            }
+        })
+        .catch(error => next(error));
+}
