@@ -1,12 +1,12 @@
-<form method="POST" action="/quizzes/<%= quiz.id %>/tips/<%= tip.id %>?_method=PUT" >
+<form method="POST" action="/quizzes/<%= quiz.id %>/tips/<%= tip.id %>?_method=PUT">
 
     <div class="wideRow">
 
-        <span class="itemNarrow">New Tip:</span>
+        <span class="itemNarrow">Edit Tip:</span>
 
         <input type="text" class="itemWide" id="tip" name="text" value="<%= tip.text %>" placeholder="Tip" autocomplete="off" />
 
-        <button type="submit" class="itemNarrow">Edit</button>
+        <button type="submit" class="itemNarrow">Save</button>
     </div>
 
 </form>
